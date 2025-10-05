@@ -91,4 +91,4 @@ Additional modifications and enhancements were made by Komali Devi Chappa to bet
 
 ---
 
-## 🔗 **Backend Repository:** [Lost & Found Backend](https://github.com/komalidevi810/lost_found-backend)
+## 🔗 **Frontend Repository:** [Lost & Found Frontend](https://github.com/komalidevi810/Lost_and_Found)
