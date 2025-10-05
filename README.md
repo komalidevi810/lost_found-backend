@@ -89,4 +89,6 @@ This project was created as part of a learning exercise in full-stack web develo
 The structure and implementation were inspired by an open-source project found online.
 Additional modifications and enhancements were made by Komali Devi Chappa to better understand real-world application development.
 
-##🔗 **Backend Repository:** [Lost & Found Backend](https://github.com/komalidevi810/lost_found-backend)
+---
+
+## 🔗 **Backend Repository:** [Lost & Found Backend](https://github.com/komalidevi810/lost_found-backend)
