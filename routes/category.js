@@ -1,20 +1,20 @@
-const { postitem } = require("../models/category");
-const messageschema = require("../models/messages");
-require("dotenv").config({path: '../../.env'});
-// const { requestitem } = require("../models/category");
-const { requireSignin, userMiddleware } = require("../middleware");
 const express = require("express");
-const router = express.Router();
 const multer = require("multer");
 const shortid = require("shortid");
-var aws = require('aws-sdk')
-var multerS3 = require('multer-s3')
-// const upload=multer({dest:'uploads/'})
 const path = require("path");
-const log = console.log;
+const { requireSignin, userMiddleware } = require("../middleware");
+const { postitem } = require("../models/category");
+const messageschema = require("../models/messages");
 const SignUp = require("../models/signup");
-const category = require("../models/category");
-var storage = multer.diskStorage({
+
+require("dotenv").config();
+
+const router = express.Router();
+
+// ------------------------------------
+// 🔹 Multer Storage Configuration (Local)
+// ------------------------------------
+const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "./uploads");
   },
@@ -22,289 +22,274 @@ var storage = multer.diskStorage({
     cb(null, shortid.generate() + "-" + file.originalname + "-" + Date.now());
   },
 });
+const upload = multer({ storage });
 
-var upload = multer({ storage });
-
-const AWS= new aws.S3({
-  accessKeyId: process.env.AWSACCESSKEY,
-  secretAccessKey: process.env.AWSSECRETACCESSKEY
-})
-var uploadS3 = multer({
-  storage: multerS3({
-    s3: AWS,
-    bucket: 'lost-and-found-system',
-    acl:'public-read',
-    metadata: function (req, file, cb) {
-      cb(null, {fieldName: file.fieldname});
-    },
-    key: function (req, file, cb) {
-      cb(null, shortid.generate() + "-" + file.originalname + "-" + Date.now())
-    }
-  })
-})
-
+// ------------------------------------
+// 🔹 POST: Create New Item
+// ------------------------------------
 router.post(
   "/postitem",
   requireSignin,
   userMiddleware,
-  uploadS3.array("itemPictures"),
+  upload.array("itemPictures"),
   async (req, res) => {
-    // console.log(req)
-    console.log("Hitted the POST successfully ");
+    console.log("POST /postitem hit");
     try {
-      console.log("try");
       const { name, description, question, type } = req.body;
-      console.log(req.files);
-      // console.log(req.body);
-      // console.log(createdBy)
-      var itemPictures = [];
-      if (req.files.length > 0) {
-        itemPictures = req.files.map((file) => {
-          return { img: file.key };
+
+      if (!name || !description || !type) {
+        return res.status(400).json({
+          success: false,
+          message: "Please fill all required fields",
         });
       }
 
-      //Saving data to db
+      let itemPictures = [];
+      if (req.files && req.files.length > 0) {
+        itemPictures = req.files.map((file) => ({
+          img: file.filename,
+        }));
+      }
 
-      const newPost = await postitem.create({
-        name: name,
-        description: description,
-        question: question,
-        type: type,
+      const newPost = new postitem({
+        name,
+        description,
+        question,
+        type,
         createdBy: req.user._id,
-        itemPictures: itemPictures,
+        itemPictures,
       });
-      newPost.save((error, item) => {
-        if (error) return res.status(400).json({ error });
-        if (item) return res.status(201).json({ item });
+
+      await newPost.save();
+
+      return res.status(201).json({
+        success: true,
+        message: "Item posted successfully!",
+        item: newPost,
       });
-      // upload.single('image')
-
-      // if(req.body.itemPictures!=''){
-      //   console.log(":Executed:")
-      //   newPost.insert({itemPictures:req.body.itemPictures})
-      // }
-
-      // sendToken(newSignup,201,req,res)
-      // console.log(newPost);
-      // res.status(200).json({
-      //   body:req.body,
-      //   file:req.files
-      // });
-      // res.send("Done")
     } catch (err) {
-      console.log("Error")
-      res.status(401).json({
-        "Message is": err.message,
+      console.error("Error in /postitem:", err.message);
+      return res.status(500).json({
+        success: false,
+        message: "Server error while posting item",
+        error: err.message,
       });
     }
   }
 );
-// router.post("/founditem", requireSignin, userMiddleware, async (req, res) => {
-//   try {
-//     console.log(req.body.name,req.body.description,req.body.itemPictures,req.user._id)
-//     const newRequest = await requestitem.create({
-//       name: req.body.name,
-//       description: req.body.description,
-//       itemPictures:req.body.itemPictures,
-//       createdBy: req.user._id,
-//     });
-//     // sendToken(newSignup,201,req,res)
-//     console.log(newRequest);
-//     res.status(200).json({
-//       message: "Request Done",
-//     });
-//     // res.send("Done")
-//   } catch (err) {
-//     res.status(401).json(err.message);
-//   }
-// });
-router.get("/getitem", (req, res) => {
-  postitem.find({}).exec((err, postitems) => {
-    if (err) return res.status(400).json({ err });
-    if (postitems) {
-      // let items_list=[]
-      // postitems.map((item)=>{
-      //   // console.log(item.createdBy)
-      //   SignUp.find({_id:item.createdBy}).lean()
-      //   .exec((error,info)=>{
-      //     if (error) res.status(400).json({'error':error})
-      //     // res.json(info)
-      //     // console.log(info[0].username)
-      //     // res.status(200).json({
-      //     // console.log(typeof(item))
-      //     item.username=info[0].username
-      //     console.log(item)
-      //     items_list.push(item)
-      //     // console.log(items_list)
-      //     // })
-      //   })
-      // })
-      res.status(200).json({
-        postitems,
-      });
-    }
-  });
-});
 
-router.get("/item/:id", (req, res) => {
-  const { id } = req.params;
-  // console.log(id)
-  postitem.find({ _id: id }).exec((err, item) => {
-    if (err) return res.status(400).json({ Error: err });
-    // console.log(item)
-    messageschema.find({ itemId: item[0]._id }).exec((err, answers) => {
-      if (err) return res.status(400).json({ Error: err });
-
-      // console.log(answers)
-      res.status(200).json({
-        Item: item,
-        Answers: answers,
-      });
+// ------------------------------------
+// 🔹 GET: Fetch All Items
+// ------------------------------------
+router.get("/getitem", async (req, res) => {
+  try {
+    const postitems = await postitem.find({});
+    return res.status(200).json({
+      success: true,
+      postitems,
     });
-  });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching items",
+      error: err.message,
+    });
+  }
 });
 
+// ------------------------------------
+// 🔹 GET: Fetch Single Item by ID
+// ------------------------------------
+router.get("/item/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const item = await postitem.findById(id);
+    if (!item)
+      return res.status(404).json({ success: false, message: "Item not found" });
+
+    const answers = await messageschema.find({ itemId: id });
+
+    res.status(200).json({
+      success: true,
+      item,
+      answers,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching item details",
+      error: err.message,
+    });
+  }
+});
+
+// ------------------------------------
+// 🔹 POST: Edit Item
+// ------------------------------------
 router.post("/edititem", upload.array("itemPictures"), async (req, res) => {
-  const { id, name, description, question, type, createdBy, olditemPictures } = req.body;
-  console.log(req.files);
-  // console.log(req.body)
-  // console.log(id)
-  console.log(olditemPictures)
+  try {
+    const { id, name, description, question, type, createdBy, olditemPictures } = req.body;
 
-  var itemPictures = [];
-  if (req.files.length > 0) {
-    itemPictures = req.files.map((file) => {
-      return { img: file.filename };
-    });
-  }
-  let item = {
-    name: name,
-    description: description,
-    type: type,
-    question: question,
-    createdBy:createdBy
-  };
-  if(olditemPictures){
-    console.log("Old one")
-    let itemPictures=[]
-    itemPictures=olditemPictures.map((pic)=>{
-      return { img: pic }
-    })
-    item.itemPictures=itemPictures
-  }
-  else{
-    console.log("New one ",itemPictures)
-    item.itemPictures=itemPictures
-  }
-  // console.log(item)
-  const updateItem = await postitem.findOneAndUpdate({ _id: id }, item, {
-    new: true,
-  });
-  res.status(200).json({
-    updateItem,
-  });
-});
+    let itemPictures = [];
 
-router.post("/deleteitem", async (req, res) => {
-  const { item_id } = req.body;
-  console.log("Item id is :", item_id);
-  const deleteitem = await postitem.findOneAndDelete({ _id: item_id });
-  const deletemsgs = await messageschema.deleteMany({ itemId: item_id });
-
-  res.status(200).json({
-    body: req.body,
-  });
-});
-
-router.get("/getnumber/:id", (req, res) => {
-  const { id } = req.params;
-  console.log("Id is :", id);
-  SignUp.find({ _id: id }).exec((err, user) => {
-    res.status(200).json({
-      Number: user[0].number,
-    });
-  });
-});
-
-router.get("/getquestion/:id", (req, res) => {
-  const { id } = req.params;
-  console.log("Id is :", id);
-  postitem.find({ _id: id }).exec((err, item) => {
-    if (err) return res.status(400).json({ Error: err });
-
-    // console.log(item)
-    // console.log(item[0].createdBy)
-    const createdBy = item[0].createdBy;
-    SignUp.find({ _id: createdBy }).exec((err, user) => {
-      res.status(200).json({
-        Question: user[0].number,
-      });
-    });
-  });
-});
-
-router.post("/submitAnswer", async (req, res) => {
-  console.log(req.body);
-  const { itemId, question, answer, givenBy, belongsTo } = req.body;
-  // postitem.find({_id:itemId}).exec(((err,user)=>{
-  //   console.log(user[0].createdBy)
-  //   belongsTo=user[0].createdBy
-  // }))
-
-  const newmessage = await messageschema.create({
-    itemId: itemId,
-    belongsTo: belongsTo,
-    question: question,
-    answer: answer,
-    givenBy: givenBy,
-  });
-  newmessage.save((error, item) => {
-    if (error) return res.status(400).json({ error });
-    if (item) return res.status(201).json({ item });
-  });
-});
-
-router.get("/myresponses/:id", (req, res) => {
-  const { id } = req.params;
-  console.log("Used Id is :", id);
-  messageschema.find({ givenBy: id }).exec((err, item) => {
-    if (err) return res.status(400).json({ Error: err });
-
-    console.log(item);
-    res.status(200).json({
-      item: item,
-    });
-  });
-});
-
-router.get("/mylistings/:id", (req, res) => {
-  const { id } = req.params;
-  console.log("Used Id is :",id)
-  postitem.find({ createdBy: id }).exec((err, item) => {
-    if (err) return res.status(400).json({ Error: err });
-
-    // console.log(item)
-    res.status(200).json({
-      item: item,
-    });
-  });
-});
-
-router.post("/confirmResponse/:id", (req, res) => {
-  const { id } = req.params;
-  // console.log("Used Id is :",id)
-  console.log(id);
-  console.log(req.body);
-  messageschema.updateOne(
-    { _id: id },
-    { $set: { response: req.body.response } },
-    { upsert: false },
-    (err, updatedMessage) => {
-      if (err) return res.status(400).json({ msg: err });
-
-      res.status(200).json({ msg: "Updated" });
+    if (req.files && req.files.length > 0) {
+      itemPictures = req.files.map((file) => ({ img: file.filename }));
+    } else if (olditemPictures) {
+      itemPictures = olditemPictures.map((pic) => ({ img: pic }));
     }
-  );
+
+    const updatedItem = await postitem.findOneAndUpdate(
+      { _id: id },
+      { name, description, question, type, createdBy, itemPictures },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Item updated successfully",
+      updatedItem,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Error updating item",
+      error: err.message,
+    });
+  }
 });
+
+// ------------------------------------
+// 🔹 POST: Delete Item
+// ------------------------------------
+router.post("/deleteitem", async (req, res) => {
+  try {
+    const { item_id } = req.body;
+    await postitem.findByIdAndDelete(item_id);
+    await messageschema.deleteMany({ itemId: item_id });
+
+    res.status(200).json({
+      success: true,
+      message: "Item deleted successfully",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Error deleting item",
+      error: err.message,
+    });
+  }
+});
+
+// ------------------------------------
+// 🔹 GET: Fetch User Phone Number by ID
+// ------------------------------------
+router.get("/getnumber/:id", async (req, res) => {
+  try {
+    const user = await SignUp.findById(req.params.id);
+    if (!user)
+      return res.status(404).json({ success: false, message: "User not found" });
+
+    res.status(200).json({
+      success: true,
+      number: user.number,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching number",
+      error: err.message,
+    });
+  }
+});
+
+// ------------------------------------
+// 🔹 POST: Submit Answer to Item
+// ------------------------------------
+router.post("/submitAnswer", async (req, res) => {
+  try {
+    const { itemId, question, answer, givenBy, belongsTo } = req.body;
+
+    const newMessage = await messageschema.create({
+      itemId,
+      belongsTo,
+      question,
+      answer,
+      givenBy,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Answer submitted successfully",
+      newMessage,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Error submitting answer",
+      error: err.message,
+    });
+  }
+});
+
+// ------------------------------------
+// 🔹 GET: Fetch My Responses
+// ------------------------------------
+router.get("/myresponses/:id", async (req, res) => {
+  try {
+    const responses = await messageschema.find({ givenBy: req.params.id });
+    res.status(200).json({
+      success: true,
+      responses,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching responses",
+      error: err.message,
+    });
+  }
+});
+
+// ------------------------------------
+// 🔹 GET: Fetch My Listings
+// ------------------------------------
+router.get("/mylistings/:id", async (req, res) => {
+  try {
+    const listings = await postitem.find({ createdBy: req.params.id });
+    res.status(200).json({
+      success: true,
+      listings,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching listings",
+      error: err.message,
+    });
+  }
+});
+
+// ------------------------------------
+// 🔹 POST: Confirm a Response
+// ------------------------------------
+router.post("/confirmResponse/:id", async (req, res) => {
+  try {
+    await messageschema.updateOne(
+      { _id: req.params.id },
+      { $set: { response: req.body.response } }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Response confirmed successfully",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Error confirming response",
+      error: err.message,
+    });
+  }
+});
+
 module.exports = router;

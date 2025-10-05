@@ -26,7 +26,7 @@ app.use(cors({
     origin:"http://localhost:3000",
     credentials: true
 }));
-app.use(express.static(path.join(__dirname, 'uploads')));
+app.use("/uploads", express.static("uploads"));
 app.use(cookie_parser())
 // app.use(bodyParser.urlencoded({ extended: true }));
 // app.use(bodyParser.json())
